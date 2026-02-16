@@ -2,8 +2,11 @@ import { execSync } from "child_process";
 import path from "path";
 import fs from "fs";
 
+const LIBREOFFICE = "/usr/bin/libreoffice";
+
 /**
- * Convert a .pptx file to PNG images using LibreOffice.
+ * Convert a .pptx file to PNG images.
+ * Uses LibreOffice to convert PPTX → PDF, then pdf-to-img (pdfjs) to render each page as PNG.
  * Returns an array of relative paths to the generated slide images.
  */
 export async function extractSlides(
@@ -13,14 +16,13 @@ export async function extractSlides(
   const outputDir = path.join(process.cwd(), "public", "slides", presentationId);
   fs.mkdirSync(outputDir, { recursive: true });
 
-  // Use LibreOffice to convert PPTX to PDF first, then to images
   const tempDir = path.join(process.cwd(), "uploads", `temp_${presentationId}`);
   fs.mkdirSync(tempDir, { recursive: true });
 
   try {
-    // Convert PPTX to PDF
+    // Step 1: Convert PPTX to PDF via LibreOffice
     execSync(
-      `libreoffice --headless --convert-to pdf --outdir "${tempDir}" "${pptxPath}"`,
+      `"${LIBREOFFICE}" --headless --convert-to pdf --outdir "${tempDir}" "${pptxPath}"`,
       { timeout: 120000, stdio: "pipe" }
     );
 
@@ -30,60 +32,13 @@ export async function extractSlides(
     }
     const pdfPath = path.join(tempDir, pdfFiles[0]);
 
-    // Convert PDF pages to individual PNG images using LibreOffice
-    execSync(
-      `libreoffice --headless --convert-to png --outdir "${outputDir}" "${pdfPath}"`,
-      { timeout: 120000, stdio: "pipe" }
-    );
-
-    // LibreOffice produces a single PNG from PDF. We need per-page images.
-    // Use a different approach: convert PPTX directly to individual images
-    // by first converting to individual PDFs or using the impress filter.
-
-    // Alternative: convert PPTX slides to images via HTML/SVG export
-    // Simplest reliable approach: use pdftoppm if available
-    const hasPdftoppm = (() => {
-      try {
-        execSync("which pdftoppm", { stdio: "pipe" });
-        return true;
-      } catch {
-        return false;
-      }
-    })();
-
-    // Clean any single PNG from libreoffice
-    const existingPngs = fs.readdirSync(outputDir).filter(f => f.endsWith(".png"));
-    for (const f of existingPngs) {
-      fs.unlinkSync(path.join(outputDir, f));
-    }
-
-    if (hasPdftoppm) {
-      execSync(
-        `pdftoppm -png -r 200 "${pdfPath}" "${path.join(outputDir, "slide")}"`,
-        { timeout: 120000, stdio: "pipe" }
-      );
-    } else {
-      // Fallback: use convert (ImageMagick) or just serve the single page
-      try {
-        execSync(
-          `convert -density 200 "${pdfPath}" "${path.join(outputDir, "slide-%02d.png")}"`,
-          { timeout: 120000, stdio: "pipe" }
-        );
-      } catch {
-        // Last fallback: use LibreOffice to convert each slide
-        // Just copy the single PNG and call it slide-1
-        execSync(
-          `libreoffice --headless --convert-to png --outdir "${outputDir}" "${pdfPath}"`,
-          { timeout: 120000, stdio: "pipe" }
-        );
-        const pngs = fs.readdirSync(outputDir).filter(f => f.endsWith(".png"));
-        if (pngs.length === 1) {
-          fs.renameSync(
-            path.join(outputDir, pngs[0]),
-            path.join(outputDir, "slide-01.png")
-          );
-        }
-      }
+    // Step 2: Convert each PDF page to PNG using pdf-to-img (pure JS, no native deps)
+    const { pdf } = await import("pdf-to-img");
+    let pageNum = 1;
+    for await (const image of await pdf(pdfPath, { scale: 2.0 })) {
+      const fileName = `slide-${String(pageNum).padStart(3, "0")}.png`;
+      fs.writeFileSync(path.join(outputDir, fileName), image);
+      pageNum++;
     }
 
     // Collect all generated PNG files sorted by name
