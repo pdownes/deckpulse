@@ -77,9 +77,8 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Upload error:", error);
-    return NextResponse.json(
-      { error: "Failed to process presentation" },
-      { status: 500 }
-    );
+    const message =
+      error instanceof Error ? error.message : "Failed to process presentation";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
