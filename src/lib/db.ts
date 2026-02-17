@@ -16,6 +16,7 @@ export function getDb(): Database.Database {
 }
 
 function initializeDb(db: Database.Database) {
+  // Core tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS presentations (
       id TEXT PRIMARY KEY,
@@ -64,7 +65,6 @@ function initializeDb(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_slides_presentation ON slides(presentation_id);
     CREATE INDEX IF NOT EXISTS idx_presentations_share_code ON presentations(share_code);
     CREATE INDEX IF NOT EXISTS idx_presentations_presenter_code ON presentations(presenter_code);
-    CREATE INDEX IF NOT EXISTS idx_presentations_email ON presentations(presenter_email);
     CREATE INDEX IF NOT EXISTS idx_auth_tokens_token ON auth_tokens(token);
     CREATE INDEX IF NOT EXISTS idx_auth_tokens_email ON auth_tokens(email);
   `);
@@ -74,4 +74,7 @@ function initializeDb(db: Database.Database) {
   if (!cols.some((c) => c.name === "presenter_email")) {
     db.exec("ALTER TABLE presentations ADD COLUMN presenter_email TEXT");
   }
+
+  // Create index after migration ensures the column exists
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_presentations_email ON presentations(presenter_email)`);
 }
