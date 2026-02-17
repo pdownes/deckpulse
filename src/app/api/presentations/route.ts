@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const title = (formData.get("title") as string) || "Untitled Presentation";
+    const presenterEmail = (formData.get("email") as string) || null;
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -53,9 +54,9 @@ export async function POST(request: NextRequest) {
     const db = getDb();
 
     db.prepare(
-      `INSERT INTO presentations (id, title, share_code, presenter_code, slide_count)
-       VALUES (?, ?, ?, ?, ?)`
-    ).run(presentationId, title, shareCode, presenterCode, slidePaths.length);
+      `INSERT INTO presentations (id, title, share_code, presenter_code, presenter_email, slide_count)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(presentationId, title, shareCode, presenterCode, presenterEmail?.toLowerCase().trim() || null, slidePaths.length);
 
     const insertSlide = db.prepare(
       `INSERT INTO slides (id, presentation_id, slide_number, image_path) VALUES (?, ?, ?, ?)`

@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
+  const [email, setEmail] = useState("");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -22,6 +24,7 @@ export default function Home() {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("title", title || file.name.replace(".pptx", ""));
+      if (email) formData.append("email", email);
 
       const res = await fetch("/api/presentations", {
         method: "POST",
@@ -56,9 +59,17 @@ export default function Home() {
           <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
             DeckPulse
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Live Presentation Feedback
-          </p>
+          <div className="flex items-center gap-4">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Live Presentation Feedback
+            </p>
+            <Link
+              href="/my-presentations"
+              className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+            >
+              My Presentations
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -81,6 +92,19 @@ export default function Home() {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g. Q1 Strategy Review"
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Your Email <span className="text-slate-400 font-normal">(to access later)</span>
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="presenter@example.com"
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>

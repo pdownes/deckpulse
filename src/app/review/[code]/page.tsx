@@ -38,6 +38,9 @@ export default function ReviewPage() {
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [error, setError] = useState("");
+  const [emailAddress, setEmailAddress] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -174,6 +177,62 @@ export default function ReviewPage() {
               Generate a comprehensive AI summary of all audience feedback.
             </p>
           )}
+        </div>
+
+        {/* Export */}
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+          <h3 className="text-lg font-semibold mb-4">Export Feedback</h3>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <a
+              href={`/api/presentations/${code}/export`}
+              className={`inline-flex items-center justify-center px-4 py-2 text-sm rounded-lg font-medium transition-colors ${
+                feedback.length === 0
+                  ? "bg-slate-100 dark:bg-slate-700 text-slate-400 pointer-events-none"
+                  : "bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500"
+              }`}
+            >
+              Download CSV
+            </a>
+            <div className="flex-1 flex gap-2">
+              <input
+                type="email"
+                value={emailAddress}
+                onChange={(e) => setEmailAddress(e.target.value)}
+                placeholder="Email feedback report to..."
+                className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <button
+                onClick={async () => {
+                  if (!emailAddress) return;
+                  setEmailSending(true);
+                  setEmailSent(false);
+                  try {
+                    const res = await fetch(
+                      `/api/presentations/${code}/email-report`,
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ email: emailAddress }),
+                      }
+                    );
+                    if (res.ok) setEmailSent(true);
+                  } finally {
+                    setEmailSending(false);
+                  }
+                }}
+                disabled={
+                  !emailAddress || emailSending || feedback.length === 0
+                }
+                className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+              >
+                {emailSending
+                  ? "Sending..."
+                  : emailSent
+                  ? "Sent!"
+                  : "Email Report"}
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Slide-by-slide review */}

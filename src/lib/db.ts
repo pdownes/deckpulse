@@ -22,6 +22,7 @@ function initializeDb(db: Database.Database) {
       title TEXT NOT NULL,
       share_code TEXT NOT NULL UNIQUE,
       presenter_code TEXT NOT NULL UNIQUE,
+      presenter_email TEXT,
       slide_count INTEGER NOT NULL DEFAULT 0,
       is_live INTEGER NOT NULL DEFAULT 0,
       current_slide INTEGER NOT NULL DEFAULT 0,
@@ -49,10 +50,28 @@ function initializeDb(db: Database.Database) {
       FOREIGN KEY (presentation_id) REFERENCES presentations(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS auth_tokens (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      expires_at TEXT NOT NULL,
+      used INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_feedback_presentation ON feedback(presentation_id);
     CREATE INDEX IF NOT EXISTS idx_feedback_slide ON feedback(presentation_id, slide_number);
     CREATE INDEX IF NOT EXISTS idx_slides_presentation ON slides(presentation_id);
     CREATE INDEX IF NOT EXISTS idx_presentations_share_code ON presentations(share_code);
     CREATE INDEX IF NOT EXISTS idx_presentations_presenter_code ON presentations(presenter_code);
+    CREATE INDEX IF NOT EXISTS idx_presentations_email ON presentations(presenter_email);
+    CREATE INDEX IF NOT EXISTS idx_auth_tokens_token ON auth_tokens(token);
+    CREATE INDEX IF NOT EXISTS idx_auth_tokens_email ON auth_tokens(email);
   `);
+
+  // Migration: add presenter_email column if missing (existing databases)
+  const cols = db.prepare("PRAGMA table_info(presentations)").all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === "presenter_email")) {
+    db.exec("ALTER TABLE presentations ADD COLUMN presenter_email TEXT");
+  }
 }
