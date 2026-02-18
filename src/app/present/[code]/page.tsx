@@ -63,32 +63,36 @@ export default function PresenterDashboard() {
   useEffect(() => {
     if (!presentation) return;
 
-    const es = new EventSource(
-      `/api/presentations/${code}/feedback/stream`
-    );
-    eventSourceRef.current = es;
+    let closed = false;
 
-    es.addEventListener("init", (e) => {
-      setFeedback(JSON.parse(e.data));
-    });
+    function connect() {
+      const es = new EventSource(
+        `/api/presentations/${code}/feedback/stream`
+      );
+      eventSourceRef.current = es;
 
-    es.addEventListener("new_feedback", (e) => {
-      const newItems: FeedbackItem[] = JSON.parse(e.data);
-      setFeedback((prev) => [...newItems, ...prev]);
-    });
+      es.addEventListener("init", (e) => {
+        setFeedback(JSON.parse(e.data));
+      });
 
-    es.onerror = () => {
-      es.close();
-      // Reconnect after 3 seconds
-      setTimeout(() => {
-        eventSourceRef.current = new EventSource(
-          `/api/presentations/${code}/feedback/stream`
-        );
-      }, 3000);
-    };
+      es.addEventListener("new_feedback", (e) => {
+        const newItems: FeedbackItem[] = JSON.parse(e.data);
+        setFeedback((prev) => [...newItems, ...prev]);
+      });
+
+      es.onerror = () => {
+        es.close();
+        if (!closed) {
+          setTimeout(connect, 3000);
+        }
+      };
+    }
+
+    connect();
 
     return () => {
-      es.close();
+      closed = true;
+      eventSourceRef.current?.close();
     };
   }, [presentation, code]);
 
