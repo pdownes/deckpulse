@@ -96,6 +96,7 @@ export default function PresenterDashboard() {
   const updateSlide = useCallback(
     async (slideNum: number) => {
       setCurrentSlide(slideNum);
+      setSummary("");
       if (presentation) {
         await fetch(`/api/presentations/${code}`, {
           method: "PATCH",
@@ -123,7 +124,7 @@ export default function PresenterDashboard() {
     setSummaryLoading(true);
     try {
       const res = await fetch(
-        `/api/presentations/${code}/summary?context=live`
+        `/api/presentations/${code}/summary?context=live&slide=${currentSlide}`
       );
       const data = await res.json();
       setSummary(data.summary);
@@ -280,7 +281,7 @@ export default function PresenterDashboard() {
           {/* AI Summary */}
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold">AI Summary</h3>
+              <h3 className="font-semibold">AI Summary — Slide {currentSlide}</h3>
               <button
                 onClick={fetchSummary}
                 disabled={summaryLoading || feedback.length === 0}
