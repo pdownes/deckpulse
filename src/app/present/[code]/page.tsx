@@ -59,7 +59,18 @@ export default function PresenterDashboard() {
       .catch(() => setError("Presentation not found"));
   }, [code]);
 
-  // SSE for real-time feedback
+  // Load all feedback via regular fetch (reliable, works on refresh)
+  useEffect(() => {
+    if (!presentation) return;
+    fetch(`/api/presentations/${code}/feedback`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setFeedback(data);
+      })
+      .catch(() => {});
+  }, [presentation, code]);
+
+  // SSE for real-time new feedback only
   useEffect(() => {
     if (!presentation) return;
 
@@ -71,13 +82,13 @@ export default function PresenterDashboard() {
       );
       eventSourceRef.current = es;
 
-      es.addEventListener("init", (e) => {
-        setFeedback(JSON.parse(e.data));
-      });
-
       es.addEventListener("new_feedback", (e) => {
         const newItems: FeedbackItem[] = JSON.parse(e.data);
-        setFeedback((prev) => [...newItems, ...prev]);
+        setFeedback((prev) => {
+          const existingIds = new Set(prev.map((f) => f.id));
+          const unique = newItems.filter((f) => !existingIds.has(f.id));
+          return unique.length > 0 ? [...unique, ...prev] : prev;
+        });
       });
 
       es.onerror = () => {
@@ -313,7 +324,7 @@ export default function PresenterDashboard() {
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold">
-                Live Feedback{" "}
+                Feedback{" "}
                 <span className="text-sm font-normal text-slate-400">
                   ({feedback.length})
                 </span>
