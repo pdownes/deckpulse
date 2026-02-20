@@ -30,8 +30,11 @@ export async function GET(
   const queryParams: unknown[] = [presentation.id as string];
 
   if (slideParam) {
-    query += ` AND slide_number = ?`;
-    queryParams.push(parseInt(slideParam));
+    const parsed = parseInt(slideParam, 10);
+    if (!Number.isNaN(parsed)) {
+      query += ` AND slide_number = ?`;
+      queryParams.push(parsed);
+    }
   }
 
   query += ` ORDER BY created_at DESC`;

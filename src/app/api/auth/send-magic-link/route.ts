@@ -3,9 +3,16 @@ import { generateMagicToken } from "@/lib/auth";
 import { sendMagicLinkEmail } from "@/lib/email";
 
 export async function POST(request: NextRequest) {
-  const { email } = await request.json();
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
 
-  if (!email || typeof email !== "string" || !email.includes("@")) {
+  const { email } = body;
+
+  if (!email || typeof email !== "string" || !/^.+@.+\..+$/.test(email)) {
     return NextResponse.json(
       { error: "Valid email is required" },
       { status: 400 }

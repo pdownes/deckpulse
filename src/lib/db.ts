@@ -3,16 +3,18 @@ import path from "path";
 
 const DB_PATH = path.join(process.cwd(), "deckpulse.db");
 
-let db: Database.Database | null = null;
+// Survive Next.js HMR without leaking connections
+const globalDb = globalThis as unknown as { __deckpulse_db?: Database.Database };
 
 export function getDb(): Database.Database {
-  if (!db) {
-    db = new Database(DB_PATH);
+  if (!globalDb.__deckpulse_db) {
+    const db = new Database(DB_PATH);
     db.pragma("journal_mode = WAL");
     db.pragma("foreign_keys = ON");
     initializeDb(db);
+    globalDb.__deckpulse_db = db;
   }
-  return db;
+  return globalDb.__deckpulse_db;
 }
 
 function initializeDb(db: Database.Database) {

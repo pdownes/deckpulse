@@ -1,9 +1,14 @@
-import { randomUUID, randomBytes } from "crypto";
+import { randomUUID, randomBytes, createHmac } from "crypto";
 import { cookies } from "next/headers";
 import { getDb } from "./db";
 
 const SESSION_COOKIE = "deckpulse_session";
 const TOKEN_EXPIRY_MINUTES = 15;
+const SESSION_SECRET = process.env.SESSION_SECRET || randomBytes(32).toString("hex");
+
+function sign(payload: string): string {
+  return createHmac("sha256", SESSION_SECRET).update(payload).digest("hex");
+}
 
 export function generateMagicToken(email: string): string {
   const db = getDb();
@@ -15,6 +20,11 @@ export function generateMagicToken(email: string): string {
   db.prepare(
     `INSERT INTO auth_tokens (id, email, token, expires_at) VALUES (?, ?, ?, ?)`
   ).run(randomUUID(), email.toLowerCase().trim(), token, expiresAt);
+
+  // Clean up expired/used tokens
+  db.prepare(
+    `DELETE FROM auth_tokens WHERE used = 1 OR expires_at < datetime('now')`
+  ).run();
 
   return token;
 }
@@ -38,18 +48,17 @@ export function verifyMagicToken(
   return { email: row.email };
 }
 
-/**
- * Create a simple session: store email in a signed cookie.
- * For a personal/small-team app this is sufficient.
- * The "signature" is a hash of email + secret.
- */
 export async function createSession(email: string): Promise<void> {
   const cookieStore = await cookies();
-  const value = Buffer.from(JSON.stringify({ email, ts: Date.now() })).toString(
-    "base64"
-  );
+  const payload = Buffer.from(
+    JSON.stringify({ email: email.toLowerCase().trim(), ts: Date.now() })
+  ).toString("base64");
+  const signature = sign(payload);
+  const value = `${payload}.${signature}`;
+
   cookieStore.set(SESSION_COOKIE, value, {
     httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 30, // 30 days
@@ -62,8 +71,15 @@ export async function getSession(): Promise<{ email: string } | null> {
   if (!cookie?.value) return null;
 
   try {
+    const [payload, signature] = cookie.value.split(".");
+    if (!payload || !signature) return null;
+
+    // Verify HMAC signature
+    const expected = sign(payload);
+    if (signature !== expected) return null;
+
     const parsed = JSON.parse(
-      Buffer.from(cookie.value, "base64").toString("utf-8")
+      Buffer.from(payload, "base64").toString("utf-8")
     );
     if (parsed.email) return { email: parsed.email };
   } catch {

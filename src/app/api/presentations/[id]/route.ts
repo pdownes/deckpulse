@@ -24,11 +24,19 @@ export async function GET(
 
   const slides = db
     .prepare(
-      `SELECT * FROM slides WHERE presentation_id = ? ORDER BY slide_number`
+      `SELECT id, presentation_id, slide_number, image_path FROM slides WHERE presentation_id = ? ORDER BY slide_number`
     )
     .all(presentation.id as string);
 
-  return NextResponse.json({ ...presentation, slides });
+  // Only include presenter_code if the lookup was by presenter_code
+  const isPresenter = id === presentation.presenter_code;
+  const { presenter_code, presenter_email, ...publicFields } = presentation;
+
+  return NextResponse.json({
+    ...publicFields,
+    ...(isPresenter ? { presenter_code, presenter_email } : {}),
+    slides,
+  });
 }
 
 export async function PATCH(
@@ -36,20 +44,25 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const body = await request.json();
   const db = getDb();
 
+  // PATCH only allowed via presenter_code (not share_code or raw id)
   const presentation = db
-    .prepare(
-      `SELECT * FROM presentations WHERE presenter_code = ? OR id = ?`
-    )
-    .get(id, id) as Record<string, unknown> | undefined;
+    .prepare(`SELECT * FROM presentations WHERE presenter_code = ?`)
+    .get(id) as Record<string, unknown> | undefined;
 
   if (!presentation) {
     return NextResponse.json(
       { error: "Presentation not found" },
       { status: 404 }
     );
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
   if (body.is_live !== undefined) {
@@ -60,13 +73,17 @@ export async function PATCH(
   }
 
   if (body.current_slide !== undefined) {
+    const slide = Number(body.current_slide);
+    if (!Number.isInteger(slide) || slide < 1 || slide > (presentation.slide_count as number)) {
+      return NextResponse.json({ error: "Invalid slide number" }, { status: 400 });
+    }
     db.prepare(
       `UPDATE presentations SET current_slide = ?, updated_at = datetime('now') WHERE id = ?`
-    ).run(body.current_slide, presentation.id);
+    ).run(slide, presentation.id);
   }
 
   const updated = db
-    .prepare(`SELECT * FROM presentations WHERE id = ?`)
+    .prepare(`SELECT id, title, share_code, presenter_code, slide_count, is_live, current_slide, created_at, updated_at FROM presentations WHERE id = ?`)
     .get(presentation.id as string);
 
   return NextResponse.json(updated);

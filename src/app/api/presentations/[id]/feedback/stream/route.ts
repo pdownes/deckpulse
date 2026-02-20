@@ -1,6 +1,11 @@
 import { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
 
+/** Convert JS Date to SQLite datetime format: "YYYY-MM-DD HH:MM:SS" */
+function toSqliteDatetime(date: Date): string {
+  return date.toISOString().replace("T", " ").replace("Z", "").split(".")[0];
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -10,21 +15,23 @@ export async function GET(
 
   const presentation = db
     .prepare(
-      `SELECT * FROM presentations WHERE presenter_code = ? OR id = ?`
+      `SELECT id FROM presentations WHERE presenter_code = ? OR id = ?`
     )
-    .get(id, id) as Record<string, unknown> | undefined;
+    .get(id, id) as { id: string } | undefined;
 
   if (!presentation) {
     return new Response("Presentation not found", { status: 404 });
   }
 
-  const presentationId = presentation.id as string;
-  let lastChecked = new Date().toISOString();
+  const presentationId = presentation.id;
+  let lastChecked = toSqliteDatetime(new Date());
+  let closed = false;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       const sendEvent = (event: string, data: unknown) => {
+        if (closed) return;
         controller.enqueue(
           encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
         );
@@ -33,38 +40,46 @@ export async function GET(
       // Send initial feedback
       const allFeedback = db
         .prepare(
-          `SELECT * FROM feedback WHERE presentation_id = ? ORDER BY created_at DESC`
+          `SELECT id, presentation_id, slide_number, author_name, feedback_type, content, created_at
+           FROM feedback WHERE presentation_id = ? ORDER BY created_at DESC`
         )
         .all(presentationId);
       sendEvent("init", allFeedback);
 
-      // Poll for new feedback every 2 seconds
+      // Poll for new feedback every 3 seconds
       const interval = setInterval(() => {
         try {
           const newFeedback = db
             .prepare(
-              `SELECT * FROM feedback WHERE presentation_id = ? AND created_at > ? ORDER BY created_at DESC`
+              `SELECT id, presentation_id, slide_number, author_name, feedback_type, content, created_at
+               FROM feedback WHERE presentation_id = ? AND created_at > ? ORDER BY created_at DESC`
             )
             .all(presentationId, lastChecked);
 
           if (newFeedback.length > 0) {
             sendEvent("new_feedback", newFeedback);
-            lastChecked = new Date().toISOString();
+            lastChecked = toSqliteDatetime(new Date());
           }
 
-          // Send heartbeat
-          sendEvent("heartbeat", { time: new Date().toISOString() });
+          // Heartbeat every poll cycle
+          sendEvent("heartbeat", { time: lastChecked });
         } catch {
-          clearInterval(interval);
-          controller.close();
+          cleanup();
         }
-      }, 2000);
+      }, 3000);
 
-      // Clean up on abort
-      request.signal.addEventListener("abort", () => {
+      function cleanup() {
+        if (closed) return;
+        closed = true;
         clearInterval(interval);
-        controller.close();
-      });
+        try {
+          controller.close();
+        } catch {
+          // already closed
+        }
+      }
+
+      request.signal.addEventListener("abort", cleanup);
     },
   });
 

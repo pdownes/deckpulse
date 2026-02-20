@@ -6,6 +6,14 @@ const resend = process.env.RESEND_API_KEY
 
 const FROM_EMAIL = process.env.EMAIL_FROM || "DeckPulse <onboarding@resend.dev>";
 
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export async function sendMagicLinkEmail(
   to: string,
   token: string
@@ -85,9 +93,9 @@ export async function sendFeedbackReportEmail(
                   `<div style="margin-bottom: 8px;">
                     <span style="font-size: 12px; background: ${
                       item.feedback_type === "question" ? "#fef3c7" : "#f1f5f9"
-                    }; padding: 2px 6px; border-radius: 4px;">${item.feedback_type}</span>
-                    <strong style="font-size: 12px; margin-left: 4px;">${item.author_name}:</strong>
-                    <span>${item.content}</span>
+                    }; padding: 2px 6px; border-radius: 4px;">${escHtml(item.feedback_type)}</span>
+                    <strong style="font-size: 12px; margin-left: 4px;">${escHtml(item.author_name)}:</strong>
+                    <span>${escHtml(item.content)}</span>
                   </div>`
               )
               .join("")}
@@ -99,7 +107,7 @@ export async function sendFeedbackReportEmail(
   const html = `
     <div style="font-family: sans-serif; max-width: 640px; margin: 0 auto;">
       <h2 style="color: #4f46e5;">DeckPulse — Feedback Report</h2>
-      <h3>${presentationTitle}</h3>
+      <h3>${escHtml(presentationTitle)}</h3>
       <p style="color: #64748b;">
         ${feedback.length} total responses &middot;
         ${questions.length} questions &middot;
