@@ -4,7 +4,7 @@ const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
 
-const FROM_EMAIL = process.env.EMAIL_FROM || "DeckPulse <onboarding@resend.dev>";
+const FROM_EMAIL = process.env.EMAIL_FROM || "DeckPulse <noreply@deckpulse.xyz>";
 
 function escHtml(s: string): string {
   return s
